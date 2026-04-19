@@ -363,6 +363,33 @@ document.addEventListener("DOMContentLoaded", () => {
     return "academic";
   }
 
+  function getActivityShareUrl(activityName) {
+    const shareUrl = new URL(window.location.href);
+    shareUrl.searchParams.set("activity", activityName);
+    return shareUrl.toString();
+  }
+
+  function getActivityShareText(activityName) {
+    return `Check out ${activityName} at Mergington High School!`;
+  }
+
+  async function copyTextToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+  }
+
   // Function to fetch activities from API with optional day and time filters
   async function fetchActivities() {
     // Show loading skeletons first
@@ -498,6 +525,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Format the schedule using the new helper function
     const formattedSchedule = formatSchedule(details);
+    const shareUrl = getActivityShareUrl(name);
+    const shareText = getActivityShareText(name);
+    const encodedShareText = encodeURIComponent(`${shareText} ${shareUrl}`);
+    const encodedEmailSubject = encodeURIComponent(
+      `${name} at Mergington High School`
+    );
+    const encodedEmailBody = encodeURIComponent(
+      `${shareText}\n\nLearn more: ${shareUrl}`
+    );
+    const emailShareUrl = `mailto:?subject=${encodedEmailSubject}&body=${encodedEmailBody}`;
+    const whatsappShareUrl = `https://wa.me/?text=${encodedShareText}`;
 
     // Create activity tag
     const tagHtml = `
@@ -569,6 +607,11 @@ document.addEventListener("DOMContentLoaded", () => {
         `
         }
       </div>
+      <div class="share-actions">
+        <button type="button" class="share-button copy-share-button">Copy Link</button>
+        <a class="share-button" href="${emailShareUrl}">Email</a>
+        <a class="share-button" href="${whatsappShareUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      </div>
     `;
 
     // Add click handlers for delete buttons
@@ -586,6 +629,17 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
     }
+
+    const copyShareButton = activityCard.querySelector(".copy-share-button");
+    copyShareButton.addEventListener("click", async () => {
+      try {
+        await copyTextToClipboard(shareUrl);
+        showMessage("Activity link copied. Share it with friends!", "success");
+      } catch (error) {
+        console.error("Error copying share link:", error);
+        showMessage("Unable to copy link right now. Please try again.", "error");
+      }
+    });
 
     activitiesList.appendChild(activityCard);
   }
