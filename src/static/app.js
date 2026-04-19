@@ -363,9 +363,21 @@ document.addEventListener("DOMContentLoaded", () => {
     return "academic";
   }
 
+  function getActivityAnchor(activityName) {
+    // Lowercase, replace non-letters/numbers with "-", then trim edge "-".
+    const slug = activityName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return `activity-${slug || "item"}`;
+  }
+
   function getActivityShareUrl(activityName) {
     const shareUrl = new URL(window.location.href);
-    shareUrl.searchParams.set("activity", activityName);
+    shareUrl.search = "";
+    shareUrl.hash = "";
+    shareUrl.hash = getActivityAnchor(activityName);
     return shareUrl.toString();
   }
 
@@ -381,13 +393,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const textArea = document.createElement("textarea");
     textArea.value = text;
+    textArea.setAttribute("aria-hidden", "true");
+    textArea.readOnly = true;
     textArea.style.position = "fixed";
     textArea.style.left = "-9999px";
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    document.execCommand("copy");
+    // Deprecated fallback used only in older/non-secure contexts without Clipboard API support.
+    const copied = document.execCommand("copy");
     document.body.removeChild(textArea);
+    if (!copied) {
+      throw new Error("Clipboard copy is not available.");
+    }
   }
 
   // Function to fetch activities from API with optional day and time filters
@@ -497,12 +515,34 @@ document.addEventListener("DOMContentLoaded", () => {
     Object.entries(filteredActivities).forEach(([name, details]) => {
       renderActivityCard(name, details);
     });
+
+    focusSharedActivity();
+  }
+
+  function focusSharedActivity() {
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash) {
+      return;
+    }
+
+    const sharedCard = document.getElementById(hash);
+    if (!sharedCard) {
+      return;
+    }
+
+    sharedCard.scrollIntoView({ behavior: "smooth", block: "center" });
+    sharedCard.classList.add("shared-activity-highlight");
+
+    setTimeout(() => {
+      sharedCard.classList.remove("shared-activity-highlight");
+    }, 2500);
   }
 
   // Function to render a single activity card
   function renderActivityCard(name, details) {
     const activityCard = document.createElement("div");
     activityCard.className = "activity-card";
+    activityCard.id = getActivityAnchor(name);
 
     // Calculate spots and capacity
     const totalSpots = details.max_participants;
@@ -608,9 +648,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       </div>
       <div class="share-actions">
-        <button type="button" class="share-button copy-share-button">Copy Link</button>
-        <a class="share-button" href="${emailShareUrl}">Email</a>
-        <a class="share-button" href="${whatsappShareUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        <button type="button" class="share-button copy-share-button" aria-label="Copy activity link to clipboard">Copy Link</button>
+        <a class="share-button" href="${emailShareUrl}" aria-label="Share activity via email">Email</a>
+        <a class="share-button" href="${whatsappShareUrl}" target="_blank" rel="noopener noreferrer" aria-label="Share activity via WhatsApp (opens in new tab)">WhatsApp</a>
       </div>
     `;
 
@@ -634,10 +674,23 @@ document.addEventListener("DOMContentLoaded", () => {
     copyShareButton.addEventListener("click", async () => {
       try {
         await copyTextToClipboard(shareUrl);
+        const originalText = copyShareButton.textContent;
         showMessage("Activity link copied. Share it with friends!", "success");
+        copyShareButton.textContent = "Copied!";
+        copyShareButton.setAttribute("aria-label", "Activity link copied");
+        setTimeout(() => {
+          copyShareButton.textContent = originalText;
+          copyShareButton.setAttribute(
+            "aria-label",
+            "Copy activity link to clipboard"
+          );
+        }, 1500);
       } catch (error) {
         console.error("Error copying share link:", error);
-        showMessage("Unable to copy link right now. Please try again.", "error");
+        showMessage(
+          "Unable to copy automatically. Please copy the link from your browser address bar.",
+          "error"
+        );
       }
     });
 
